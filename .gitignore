@@ -1,0 +1,6 @@
+*.bmp
+*.jpg
+*.png
+*.o
+*.exe
+build
