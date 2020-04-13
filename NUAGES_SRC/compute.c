@@ -1,4 +1,7 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
+#include <time.h>
 #include <math.h>
 #include <stdlib.h>
 #include <gtk/gtk.h>
@@ -16,8 +19,22 @@ struct image
     unsigned height;
     unsigned channels;
     unsigned length;
-    guchar *pixels;
+    guchar* pixels;
 };
+
+static struct timespec now()
+{
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp;
+}
+
+static double elapsed_time(struct timespec* begin, struct timespec* end)
+{
+    double s = difftime(end->tv_sec, begin->tv_sec);
+    long ns = end->tv_nsec - begin->tv_nsec;
+    return s + ((double)ns) / 1.0e9;
+}
 
 struct data
 {
@@ -31,7 +48,7 @@ unsigned dist(int x, int y)
     return ABS(x - y);
 }
 
-int reassign_values(struct image *img, struct data* hist, guchar* centroids)
+int reassign_values(struct image* img, struct data* hist, guchar* centroids)
 {
     int ret = 0;
     for (unsigned i = 0; i < 255; ++i)
@@ -55,7 +72,8 @@ int reassign_values(struct image *img, struct data* hist, guchar* centroids)
     return ret;
 }
 
-void init_kmeans(struct image *img, struct data* hist, guchar* centroids, guchar* image)
+void init_kmeans(struct image* img, struct data* hist, guchar* centroids,
+                 guchar* image)
 {
     unsigned cluster_size = 255 / NB_CLUSTERS;
     for (unsigned i = 0; i < NB_CLUSTERS; ++i)
@@ -77,7 +95,8 @@ void init_kmeans(struct image *img, struct data* hist, guchar* centroids, guchar
     }
 }
 
-guchar compute_centroid_n(struct image *img, unsigned n, unsigned* i, struct data* hist)
+guchar compute_centroid_n(struct image* img, unsigned n, unsigned* i,
+                          struct data* hist)
 {
     size_t nb_points = 0;
     size_t sum = 0;
@@ -93,7 +112,7 @@ guchar compute_centroid_n(struct image *img, unsigned n, unsigned* i, struct dat
     return nb_points == 0 ? 0 : sum / nb_points;
 }
 
-int recompute_centroids(struct image *img, struct data* hist, guchar* centroids)
+int recompute_centroids(struct image* img, struct data* hist, guchar* centroids)
 {
     int ret = 0;
     unsigned i = 0;
@@ -106,7 +125,7 @@ int recompute_centroids(struct image *img, struct data* hist, guchar* centroids)
     return ret;
 }
 
-void kmeans(struct image *img)
+void kmeans(struct image* img)
 {
     struct data hist[255];
     guchar centroids[NB_CLUSTERS];
@@ -153,6 +172,7 @@ void kmeans(struct image *img)
   Voir aussi:
 
   ---------------------------------------*/
+
 void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
 {
     int iNbPixelsTotal, iNumPix;
@@ -175,6 +195,7 @@ void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
             *(pucImaRes + iNumPix + iNumChannel) = ucMeanPix;
     }
 
+    // clang-format off
     struct image img = {
         .width = NbCol,
         .height = NbLine,
@@ -182,6 +203,14 @@ void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
         .length = NbCol * NbLine * 3,
         .pixels = pucImaRes
     };
+    // clang-format on
 
+    struct timespec begin = now();
     kmeans(&img);
+    struct timespec end = now();
+    double total = elapsed_time(&begin, &end);
+
+    printf("======================\n");
+    printf("Execution time: %.4lf ms\n", total * 1000);
+    printf("======================\n");
 }
