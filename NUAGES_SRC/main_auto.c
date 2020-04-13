@@ -5,13 +5,13 @@
 #include <err.h>
 #include "compute.h"
 
-int process_image(const char* name)
+void process_image(const char* name)
 {
     GdkPixbuf* pix_buf = gdk_pixbuf_new_from_file(name, NULL);
 
     if (!pix_buf)
     {
-        return 0;
+        return;
     }
 
     printf("Processing file: %s ...\n", name);
@@ -21,8 +21,6 @@ int process_image(const char* name)
     guchar* pixels = gdk_pixbuf_get_pixels(pix_buf);
 
     ComputeImage(pixels, nb_col, nb_line, NULL);
-
-    return 1;
 }
 
 int main(int argc, char** argv)
@@ -38,10 +36,7 @@ int main(int argc, char** argv)
 
     for (struct dirent* entry = readdir(d); entry; entry = readdir(d))
     {
-        if (!process_image(entry->d_name))
-        {
-            continue;
-        }
+        process_image(entry->d_name);
     }
 
     closedir(d);
