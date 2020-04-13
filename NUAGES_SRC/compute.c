@@ -8,12 +8,16 @@ IL EST FORMELLEMENT INTERDIT DE CHANGER LE PROTOTYPE
 DES FONCTIONS
 *******************************************************/
 
-#define SIZE (width * height * channels)
+#define NB_CLUSTERS 9
 
-static int width = 0;
-static int height = 0;
-static int channels = 3;
-static unsigned nb_clusters = 4;
+struct image
+{
+    unsigned width;
+    unsigned height;
+    unsigned channels;
+    unsigned length;
+    guchar *pixels;
+};
 
 struct data
 {
@@ -27,7 +31,7 @@ unsigned dist(int x, int y)
     return ABS(x - y);
 }
 
-int reassign_values(struct data* hist, guchar* centroids)
+int reassign_values(struct image *img, struct data* hist, guchar* centroids)
 {
     int ret = 0;
     for (unsigned i = 0; i < 255; ++i)
@@ -36,7 +40,7 @@ int reassign_values(struct data* hist, guchar* centroids)
         hist[i].cluster = 0;
         hist[i].dist = dist(i, centroids[0]);
 
-        for (unsigned j = 1; j < nb_clusters; ++j)
+        for (unsigned j = 1; j < NB_CLUSTERS; ++j)
         {
             unsigned d = dist(i, centroids[j]);
             if (d < hist[i].dist)
@@ -51,10 +55,10 @@ int reassign_values(struct data* hist, guchar* centroids)
     return ret;
 }
 
-void init_kmeans(struct data* hist, guchar* centroids, guchar* image)
+void init_kmeans(struct image *img, struct data* hist, guchar* centroids, guchar* image)
 {
-    unsigned cluster_size = 255 / nb_clusters;
-    for (unsigned i = 0; i < nb_clusters; ++i)
+    unsigned cluster_size = 255 / NB_CLUSTERS;
+    for (unsigned i = 0; i < NB_CLUSTERS; ++i)
     {
         centroids[i] = i * cluster_size;
     }
@@ -64,16 +68,16 @@ void init_kmeans(struct data* hist, guchar* centroids, guchar* image)
         hist[i].nb = 0;
     }
 
-    reassign_values(hist, centroids);
+    reassign_values(img, hist, centroids);
 
-    for (int i = 0; i < SIZE; i += channels)
+    for (int i = 0; i < img->length; i += img->channels)
     {
         guchar val = image[i];
         hist[val].nb++;
     }
 }
 
-guchar compute_centroid_n(unsigned n, unsigned* i, struct data* hist)
+guchar compute_centroid_n(struct image *img, unsigned n, unsigned* i, struct data* hist)
 {
     size_t nb_points = 0;
     size_t sum = 0;
@@ -89,44 +93,42 @@ guchar compute_centroid_n(unsigned n, unsigned* i, struct data* hist)
     return nb_points == 0 ? 0 : sum / nb_points;
 }
 
-int recompute_centroids(struct data* hist, guchar* centroids)
+int recompute_centroids(struct image *img, struct data* hist, guchar* centroids)
 {
     int ret = 0;
     unsigned i = 0;
-    for (unsigned n = 0; n < nb_clusters; ++n)
+    for (unsigned n = 0; n < NB_CLUSTERS; ++n)
     {
-        guchar val = compute_centroid_n(n, &i, hist);
+        guchar val = compute_centroid_n(img, n, &i, hist);
         ret = ret || centroids[n] != val;
         centroids[n] = val;
     }
     return ret;
 }
 
-void kmeans(guchar* src, guchar* dst)
+void kmeans(struct image *img)
 {
     struct data hist[255];
-    guchar* centroids = malloc(nb_clusters);
-    init_kmeans(hist, centroids, src);
+    guchar centroids[NB_CLUSTERS];
+    init_kmeans(img, hist, centroids, img->pixels);
 
     while (1)
     {
-        if (!recompute_centroids(hist, centroids))
+        if (!recompute_centroids(img, hist, centroids))
             break;
 
-        if (!reassign_values(hist, centroids))
+        if (!reassign_values(img, hist, centroids))
             break;
     }
 
-    unsigned cluster_size = 255 / nb_clusters;
-    for (int i = 0; i < SIZE; i += channels)
+    unsigned cluster_size = 255 / NB_CLUSTERS;
+    for (int i = 0; i < img->length; i += img->channels)
     {
-        guchar val = hist[src[i]].cluster * cluster_size;
-        dst[i] = val;
-        dst[i + 1] = val;
-        dst[i + 2] = val;
+        guchar val = hist[img->pixels[i]].cluster * cluster_size;
+        img->pixels[i] = val;
+        img->pixels[i + 1] = val;
+        img->pixels[i + 2] = val;
     }
-
-    free(centroids);
 }
 
 /*---------------------------------------
@@ -153,9 +155,6 @@ void kmeans(guchar* src, guchar* dst)
   ---------------------------------------*/
 void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
 {
-    width = NbCol;
-    height = NbLine;
-
     int iNbPixelsTotal, iNumPix;
     int iNumChannel, iNbChannels = 3; /* on travaille sur des images couleurs*/
     guchar ucMeanPix;
@@ -176,5 +175,13 @@ void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
             *(pucImaRes + iNumPix + iNumChannel) = ucMeanPix;
     }
 
-    kmeans(pucImaRes, pucImaRes);
+    struct image img = {
+        .width = NbCol,
+        .height = NbLine,
+        .channels = 3,
+        .length = NbCol * NbLine * 3,
+        .pixels = pucImaRes
+    };
+
+    kmeans(&img);
 }
