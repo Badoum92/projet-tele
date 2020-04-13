@@ -10,5 +10,7 @@ include_directories( ${GTK2_INCLUDE_DIRS} )
 link_directories( ${GTK2_LIBRARY_DIRS} )
 #-----------compilation step
 add_executable( imaProjet.exe main.c compute.c )
+add_executable( imaProjet_auto.exe main_auto.c compute.c )
 #-----------linking step
 target_link_libraries( imaProjet.exe ${GTK2_LIBRARIES} )
+target_link_libraries( imaProjet_auto.exe ${GTK2_LIBRARIES} )
