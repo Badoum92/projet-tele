@@ -1,9 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <time.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <gtk/gtk.h>
 
 /*******************************************************
@@ -11,6 +13,7 @@ IL EST FORMELLEMENT INTERDIT DE CHANGER LE PROTOTYPE
 DES FONCTIONS
 *******************************************************/
 
+#define CLOUDS_CLUSTER 0
 #define NB_CLUSTERS 9
 
 struct image
@@ -36,118 +39,182 @@ static double elapsed_time(struct timespec* begin, struct timespec* end)
     return s + ((double)ns) / 1.0e9;
 }
 
-struct data
+struct vector
 {
-    unsigned nb; // number of pixels with a given value
-    unsigned cluster; // 0 <= cluster < nb_clusters
-    unsigned dist; // distance to centroids[cluster]
+    int components[5]; // radiometry of a pixel and its 4-connexity neighbours
+    unsigned cluster;       // cluster of the vector (0 <= cluster < NB_CLUSTER)
+    unsigned dist;          // distance to centroids[cluster]
 };
 
-unsigned dist(int x, int y)
+unsigned dist(int *a, int *b)
 {
-    return ABS(x - y);
+    int diff[5];
+    for (unsigned i = 0; i < 5; i ++) {
+        diff[i] = a[i] - b[i];
+    }
+#define _2(X) X * X
+    unsigned dist = _2(diff[0]) + _2(diff[1]) + _2(diff[2]) + _2(diff[3]) + _2(diff[4]);
+#undef _2
+    return dist;
 }
 
-int reassign_values(struct image* img, struct data* hist, guchar* centroids)
+// Re-compute the mass center of each pixels
+bool reassign_values(struct image* img, struct vector* vectors, int* mass_centers)
 {
-    int ret = 0;
-    for (unsigned i = 0; i < 255; ++i)
+    bool ret = 0;
+    for (unsigned i = 0; i < img->width * img->height; ++i)
     {
-        unsigned old = hist[i].cluster;
-        hist[i].cluster = 0;
-        hist[i].dist = dist(i, centroids[0]);
+        struct vector *v = vectors + i;
 
+        unsigned old_cluster = v->cluster;
+        v->cluster = 0;
+
+        v->dist = dist(v->components, mass_centers);
         for (unsigned j = 1; j < NB_CLUSTERS; ++j)
         {
-            unsigned d = dist(i, centroids[j]);
-            if (d < hist[i].dist)
+            unsigned d = dist(v->components, mass_centers + (5*j));
+            if (d < v->dist)
             {
-                hist[i].cluster = j;
-                hist[i].dist = d;
+                v->cluster = j;
+                v->dist = d;
             }
         }
 
-        ret = ret || hist[i].cluster != old;
+        ret = ret || v->cluster != old_cluster;
     }
     return ret;
 }
 
-void init_kmeans(struct image* img, struct data* hist, guchar* centroids,
-                 guchar* image)
+void insert_sort(int *components, int value)
 {
-    unsigned cluster_size = 255 / NB_CLUSTERS;
-    for (unsigned i = 0; i < NB_CLUSTERS; ++i)
-    {
-        centroids[i] = i * cluster_size;
-    }
-
-    for (unsigned i = 0; i < 255; ++i)
-    {
-        hist[i].nb = 0;
-    }
-
-    reassign_values(img, hist, centroids);
-
-    for (int i = 0; i < img->length; i += img->channels)
-    {
-        guchar val = image[i];
-        hist[val].nb++;
+    components[4] = value;
+    for (int i = 3; i > 0; i--) {
+        if (components[i] > components[i + 1]) {
+            break;
+        }
+        unsigned tmp = components[i];
+        components[i] = components[i + 1];
+        components[i + 1] = tmp;
     }
 }
 
-guchar compute_centroid_n(struct image* img, unsigned n, unsigned* i,
-                          struct data* hist)
+// Init the vectors and place the mass centers
+void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
 {
-    size_t nb_points = 0;
-    size_t sum = 0;
-
-    unsigned cur = *i;
-    for (; cur < 255 && hist[cur].cluster == n; cur++)
+    // Init vectors from neighbours
+    for (unsigned y = 0; y < img->height; y++)
     {
-        nb_points += hist[cur].nb;
-        sum += hist[cur].nb * cur;
-    }
-    *i = cur;
+        for (unsigned x = 0; x < img->width; x++)
+        {
+            // each vector is already 0 because of calloc
 
-    return nb_points == 0 ? 0 : sum / nb_points;
+            unsigned i = y * img->width + x;
+
+            // add left neighbour
+            if (x > 0) {
+                insert_sort(vectors[i].components, img->pixels[y * img->width + (x - 1)]);
+            }
+
+            // add up neighbour
+            if (y > 0) {
+                insert_sort(vectors[i].components, img->pixels[(y - 1) * img->width + x]);
+            }
+
+            // add right neighbour
+            if (x < img->width - 1) {
+                insert_sort(vectors[i].components, img->pixels[y * img->width + (x + 1)]);
+            }
+
+            // add up neighbour
+            if (y < img->height - 1) {
+                insert_sort(vectors[i].components, img->pixels[(y + 1) * img->width + x]);
+            }
+        }
+    }
+
+    // Initialize mass centers
+    unsigned step = 255 / NB_CLUSTERS;
+    for (unsigned i_cluster = 1; i_cluster < NB_CLUSTERS; i_cluster++)
+    {
+        unsigned value = 255 - i_cluster * step;
+        for (unsigned i = 0; i < 5; i++) {
+            mass_centers[i_cluster * 5 + i] = value;
+        }
+    }
+
+    reassign_values(img, vectors, mass_centers);
 }
 
-int recompute_centroids(struct image* img, struct data* hist, guchar* centroids)
+void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, unsigned i_cluster)
 {
-    int ret = 0;
-    unsigned i = 0;
-    for (unsigned n = 0; n < NB_CLUSTERS; ++n)
+    unsigned nb_points = 0;
+
+    // TODO: median for cluser 0
+
+    for (unsigned i_vector = 0; i_vector < img->width * img->height; i_vector++)
     {
-        guchar val = compute_centroid_n(img, n, &i, hist);
-        ret = ret || centroids[n] != val;
-        centroids[n] = val;
+        struct vector *v = vectors + i_vector;
+
+        if (v->cluster != i_cluster) {
+            continue;
+        }
+
+        for (unsigned i = 0; i < 5; i++) {
+            mean[i] += v->components[i];
+        }
+
+        nb_points++;
     }
+
+    if (nb_points) {
+        for (unsigned i = 0; i < 5; i++) {
+            mean[i] = mean[i] / nb_points;
+        }
+    }
+}
+
+bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_centers)
+{
+    bool ret = false;
+
+    for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; ++i_cluster)
+    {
+        int mean[5];
+        compute_centroid_n(mean, img, vectors, i_cluster);
+        ret = ret || memcmp(mass_centers + 5 * i_cluster, mean, 5 * sizeof(int)) != 0;
+
+        memcpy(&mass_centers[i_cluster], mean, 5 * sizeof(int));
+    }
+
     return ret;
 }
 
 void kmeans(struct image* img)
 {
-    struct data hist[255];
-    guchar centroids[NB_CLUSTERS];
-    init_kmeans(img, hist, centroids, img->pixels);
+    struct vector *vectors = calloc(img->width * img->height, sizeof(struct vector));
+    int mass_centers[NB_CLUSTERS * 5];
+
+    init_kmeans(img, vectors, mass_centers);
 
     while (1)
     {
-        if (!recompute_centroids(img, hist, centroids))
+        if (!recompute_centroids(img, vectors, mass_centers))
             break;
 
-        if (!reassign_values(img, hist, centroids))
+        if (!reassign_values(img, vectors, mass_centers))
             break;
     }
 
     unsigned cluster_size = 255 / NB_CLUSTERS;
-    for (int i = 0; i < img->length; i += img->channels)
+    for (int i = 0; i < img->width * img->height; i++)
     {
-        guchar val = hist[img->pixels[i]].cluster * cluster_size;
-        img->pixels[i] = val;
-        img->pixels[i + 1] = val;
-        img->pixels[i + 2] = val;
+        guchar val = 255 - vectors[i].cluster * cluster_size;
+        img->pixels[3*i] = val;
+        img->pixels[3*i + 1] = val;
+        img->pixels[3*i + 2] = val;
     }
+
+    free(vectors);
 }
 
 /*---------------------------------------
