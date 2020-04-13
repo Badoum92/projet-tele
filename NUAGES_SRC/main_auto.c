@@ -14,6 +14,7 @@ void process_image(const char* name)
         return;
     }
 
+    printf("============================================\n");
     printf("Processing file: %s ...\n", name);
 
     int nb_col = gdk_pixbuf_get_width(pix_buf);
@@ -21,6 +22,8 @@ void process_image(const char* name)
     guchar* pixels = gdk_pixbuf_get_pixels(pix_buf);
 
     ComputeImage(pixels, nb_col, nb_line, NULL);
+
+    gdk_pixbuf_unref(pix_buf);
 }
 
 int main(int argc, char** argv)
