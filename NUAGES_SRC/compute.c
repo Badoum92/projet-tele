@@ -173,44 +173,29 @@ void kmeans(struct image* img)
 
   ---------------------------------------*/
 
-void ComputeImage(guchar* pucImaOrig, int NbLine, int NbCol, guchar* pucImaRes)
+void ComputeImage(guchar* src, int height, int width, guchar* dst)
 {
-    int iNbPixelsTotal, iNumPix;
-    int iNumChannel, iNbChannels = 3; /* on travaille sur des images couleurs*/
-    guchar ucMeanPix;
-
-    printf("Segmentation de l'image.... A vous!\n");
-
-    iNbPixelsTotal = NbCol * NbLine;
-    for (iNumPix = 0; iNumPix < iNbPixelsTotal * iNbChannels;
-         iNumPix = iNumPix + iNbChannels)
-    {
-        /*moyenne sur les composantes RVB */
-        ucMeanPix = (unsigned char)((*(pucImaOrig + iNumPix)
-                                     + *(pucImaOrig + iNumPix + 1)
-                                     + *(pucImaOrig + iNumPix + 2))
-                                    / 3);
-        /* sauvegarde du resultat */
-        for (iNumChannel = 0; iNumChannel < iNbChannels; iNumChannel++)
-            *(pucImaRes + iNumPix + iNumChannel) = ucMeanPix;
-    }
-
     // clang-format off
     struct image img = {
-        .width = NbCol,
-        .height = NbLine,
+        .width = width,
+        .height = height,
         .channels = 3,
-        .length = NbCol * NbLine * 3,
-        .pixels = pucImaRes
+        .length = width * height * 3,
+        .pixels = dst ? dst : src
     };
     // clang-format on
+
+    for (unsigned i = 0; i < img.length; i += img.channels)
+    {
+        unsigned char mean = (src[i] + src[i + 1] + src[i + 2]) / 3;
+        img.pixels[i] = mean;
+        img.pixels[i + 1] = mean;
+        img.pixels[i + 2] = mean;
+    }
 
     struct timespec begin = now();
     kmeans(&img);
     struct timespec end = now();
     double total = elapsed_time(&begin, &end);
-
-    printf("======================\n");
     printf("Execution time: %.4lf ms\n", total * 1000);
-    printf("======================\n");
 }
