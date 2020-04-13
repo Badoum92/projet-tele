@@ -145,6 +145,11 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
     reassign_values(img, vectors, mass_centers);
 }
 
+int unsigned_comp(unsigned *a, unsigned *b)
+{
+    return (int)(*a) - (int)(*b);
+}
+
 void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, unsigned i_cluster)
 {
     unsigned nb_points = 0;
@@ -169,6 +174,15 @@ void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, un
     if (nb_points) {
         for (unsigned i = 0; i < 5; i++) {
             mean[i] = mean[i] / nb_points;
+        }
+    }
+
+    if (i_cluster == CLOUDS_CLUSTER) {
+        qsort(mean, 5, sizeof(unsigned), unsigned_comp);
+        unsigned median = mean[2];
+
+        for (unsigned i = 0; i < 5; i++) {
+            mean[i] = median;
         }
     }
 }
