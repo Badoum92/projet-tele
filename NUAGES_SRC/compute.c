@@ -70,7 +70,7 @@ bool reassign_values(struct image* img, struct vector* vectors, int* mass_center
         v->cluster = 0;
 
         v->dist = dist(v->components, mass_centers);
-        for (unsigned j = 1; j < NB_CLUSTERS; ++j)
+        for (unsigned j = 0; j < NB_CLUSTERS; ++j)
         {
             unsigned d = dist(v->components, mass_centers + (5*j));
             if (d < v->dist)
@@ -134,7 +134,7 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
 
     // Initialize mass centers
     unsigned step = 255 / NB_CLUSTERS;
-    for (unsigned i_cluster = 1; i_cluster < NB_CLUSTERS; i_cluster++)
+    for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; i_cluster++)
     {
         unsigned value = 255 - i_cluster * step;
         for (unsigned i = 0; i < 5; i++) {
@@ -145,9 +145,9 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
     reassign_values(img, vectors, mass_centers);
 }
 
-int unsigned_comp(unsigned *a, unsigned *b)
+int unsigned_comp(const void *a, const void *b)
 {
-    return (int)(*a) - (int)(*b);
+    return *(const int*)(a) - *(const int*)(b);
 }
 
 void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, unsigned i_cluster)
@@ -185,6 +185,7 @@ void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, un
             mean[i] = median;
         }
     }
+
 }
 
 bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_centers)
@@ -193,11 +194,13 @@ bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_ce
 
     for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; ++i_cluster)
     {
-        int mean[5];
+        int mean[5] = {0};
         compute_centroid_n(mean, img, vectors, i_cluster);
         ret = ret || memcmp(mass_centers + 5 * i_cluster, mean, 5 * sizeof(int)) != 0;
 
-        memcpy(&mass_centers[i_cluster], mean, 5 * sizeof(int));
+        for (unsigned i = 0; i < 5; i++) {
+            mass_centers[5 * i_cluster + i] = mean[i];
+        }
     }
 
     return ret;
@@ -219,13 +222,36 @@ void kmeans(struct image* img)
             break;
     }
 
-    unsigned cluster_size = 255 / NB_CLUSTERS;
-    for (int i = 0; i < img->width * img->height; i++)
+
+    unsigned pixels_per_cluster[NB_CLUSTERS] = {0};
+    for (unsigned i = 0; i < img->width * img->height; i++)
     {
-        guchar val = 255 - vectors[i].cluster * cluster_size;
-        img->pixels[3*i] = val;
-        img->pixels[3*i + 1] = val;
-        img->pixels[3*i + 2] = val;
+        struct vector *v = vectors + i;
+        pixels_per_cluster[v->cluster]++;
+    }
+
+    for (unsigned i = 0; i < NB_CLUSTERS; i++)
+    {
+        printf("Pixels in cluster %u: %u.\n", i, pixels_per_cluster[i]);
+    }
+
+    // Update the img to show every cluster
+    unsigned cluster_size = 255 / NB_CLUSTERS;
+    for (unsigned i = 0; i < img->width * img->height; i++)
+    {
+        if (false && vectors[i].cluster == CLOUDS_CLUSTER)
+        {
+            img->pixels[3*i]     = 255;
+            img->pixels[3*i + 1] = 0;
+            img->pixels[3*i + 2] = 0;
+        }
+        else
+        {
+            guchar val = 255 - vectors[i].cluster * cluster_size;
+            img->pixels[3*i] = val;
+            img->pixels[3*i + 1] = val;
+            img->pixels[3*i + 2] = val;
+        }
     }
 
     free(vectors);
