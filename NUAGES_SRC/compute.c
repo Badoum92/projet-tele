@@ -88,7 +88,7 @@ bool reassign_values(struct image* img, struct vector* vectors, int* mass_center
 void insert_sort(int *components, int value)
 {
     components[4] = value;
-    for (int i = 3; i > 0; i--) {
+    for (int i = 3; i >= 0; i--) {
         if (components[i] > components[i + 1]) {
             break;
         }
@@ -107,27 +107,28 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
         for (unsigned x = 0; x < img->width; x++)
         {
             // each vector is already 0 because of calloc
-
             unsigned i = y * img->width + x;
+
+            insert_sort(vectors[i].components, img->pixels[img->channels*(y * img->width + x)]);
 
             // add left neighbour
             if (x > 0) {
-                insert_sort(vectors[i].components, img->pixels[y * img->width + (x - 1)]);
+                insert_sort(vectors[i].components, img->pixels[img->channels*(y * img->width + (x - 1))]);
             }
 
             // add up neighbour
             if (y > 0) {
-                insert_sort(vectors[i].components, img->pixels[(y - 1) * img->width + x]);
+                insert_sort(vectors[i].components, img->pixels[img->channels*((y - 1) * img->width + x)]);
             }
 
             // add right neighbour
             if (x < img->width - 1) {
-                insert_sort(vectors[i].components, img->pixels[y * img->width + (x + 1)]);
+                insert_sort(vectors[i].components, img->pixels[img->channels*(y * img->width + (x + 1))]);
             }
 
             // add up neighbour
             if (y < img->height - 1) {
-                insert_sort(vectors[i].components, img->pixels[(y + 1) * img->width + x]);
+                insert_sort(vectors[i].components, img->pixels[img->channels*((y + 1) * img->width + x)]);
             }
         }
     }
@@ -177,8 +178,9 @@ void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, un
         }
     }
 
+
     if (i_cluster == CLOUDS_CLUSTER) {
-        qsort(mean, 5, sizeof(unsigned), unsigned_comp);
+        qsort(mean, 5, sizeof(int), unsigned_comp);
         unsigned median = mean[2];
 
         for (unsigned i = 0; i < 5; i++) {
@@ -204,6 +206,20 @@ bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_ce
     }
 
     return ret;
+}
+
+void print_centers(int *mass_centers)
+{
+    for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; ++i_cluster)
+    {
+        printf("center %u: ", i_cluster);
+
+        for (unsigned i = 0; i < 5; i++) {
+            printf("%4d ", mass_centers[i_cluster * 5 + i]);
+        }
+
+        printf("\n");
+    }
 }
 
 void kmeans(struct image* img)
