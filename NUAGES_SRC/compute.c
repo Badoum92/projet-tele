@@ -65,16 +65,16 @@ unsigned dist(int* a, int* b)
 bool reassign_values(struct image* img, struct vector* vectors,
                      int* mass_centers)
 {
-    bool ret = 0;
+    bool ret = false;
     for (unsigned i = 0; i < img->size; ++i)
     {
         struct vector* v = vectors + i;
 
         unsigned old_cluster = v->cluster;
         v->cluster = 0;
-
         v->dist = dist(v->components, mass_centers);
-        for (unsigned j = 0; j < NB_CLUSTERS; ++j)
+
+        for (unsigned j = 1; j < NB_CLUSTERS; ++j)
         {
             unsigned d = dist(v->components, mass_centers + (5 * j));
             if (d < v->dist)
@@ -157,10 +157,7 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
     for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; i_cluster++)
     {
         unsigned value = 255 - i_cluster * step;
-        for (unsigned i = 0; i < 5; i++)
-        {
-            mass_centers[i_cluster * 5 + i] = value;
-        }
+        memset(mass_centers + i_cluster * 5, value, 5 * sizeof(int));
     }
 
     reassign_values(img, vectors, mass_centers);
