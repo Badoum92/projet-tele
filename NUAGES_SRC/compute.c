@@ -151,61 +151,56 @@ int unsigned_comp(const void *a, const void *b)
     return *(const int*)(a) - *(const int*)(b);
 }
 
-void compute_centroid_n(int *mean, struct image* img, struct vector *vectors, unsigned i_cluster)
+bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_centers)
 {
-    unsigned nb_points = 0;
+    int nb_points_per_cluster[NB_CLUSTERS] = {0};
+    int new_mass_centers[NB_CLUSTERS * 5] = {0};
 
-    // TODO: median for cluser 0
-
+    // sum all vectors components in their mass center
     for (unsigned i_vector = 0; i_vector < img->width * img->height; i_vector++)
     {
         struct vector *v = vectors + i_vector;
 
-        if (v->cluster != i_cluster) {
-            continue;
+        int *nb_points = nb_points_per_cluster + v->cluster;
+        int *new_mass_center = new_mass_centers + 5 * v->cluster;
+
+        for (unsigned i = 0; i < 5; i++)
+        {
+            new_mass_center[i] += v->components[i];
         }
 
-        for (unsigned i = 0; i < 5; i++) {
-            mean[i] += v->components[i];
-        }
-
-        nb_points++;
+        *nb_points = *nb_points + 1;
     }
 
-    if (nb_points) {
-        for (unsigned i = 0; i < 5; i++) {
-            mean[i] = mean[i] / nb_points;
-        }
-    }
-
-
-    if (i_cluster == CLOUDS_CLUSTER) {
-        qsort(mean, 5, sizeof(int), unsigned_comp);
-        unsigned median = mean[2];
-
-        for (unsigned i = 0; i < 5; i++) {
-            mean[i] = median;
-        }
-    }
-
-}
-
-bool recompute_centroids(struct image* img, struct vector* vectors, int* mass_centers)
-{
-    bool ret = false;
-
+    // Divide each mass_center by its nb of points to calculate the mean
     for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; ++i_cluster)
     {
-        int mean[5] = {0};
-        compute_centroid_n(mean, img, vectors, i_cluster);
-        ret = ret || memcmp(mass_centers + 5 * i_cluster, mean, 5 * sizeof(int)) != 0;
-
-        for (unsigned i = 0; i < 5; i++) {
-            mass_centers[5 * i_cluster + i] = mean[i];
+        int nb_points = nb_points_per_cluster[i_cluster];
+        if (nb_points)
+        {
+            for (unsigned i = 0; i < 5; i++)
+            {
+                new_mass_centers[i_cluster * 5 + i] = new_mass_centers[i_cluster * 5 + i] / nb_points;
+            }
         }
     }
 
-    return ret;
+    // CLOUDS_CLUSTER is always homogeneous
+    int *clouds_mass_center = new_mass_centers + CLOUDS_CLUSTER * 5;
+    qsort(clouds_mass_center, 5, sizeof(int), unsigned_comp);
+    unsigned median = clouds_mass_center[2];
+    for (unsigned i = 0; i < 5; i++) {
+        clouds_mass_center[i] = median;
+    }
+
+    bool has_changed = memcmp(mass_centers, new_mass_centers, NB_CLUSTERS * 5 * sizeof(int)) != 0;
+
+    if (has_changed)
+    {
+        memcpy(mass_centers, new_mass_centers, NB_CLUSTERS * 5 * sizeof(int));
+    }
+
+    return has_changed;
 }
 
 void print_centers(int *mass_centers)
@@ -238,7 +233,6 @@ void kmeans(struct image* img)
             break;
     }
 
-
     unsigned pixels_per_cluster[NB_CLUSTERS] = {0};
     for (unsigned i = 0; i < img->width * img->height; i++)
     {
@@ -246,16 +240,18 @@ void kmeans(struct image* img)
         pixels_per_cluster[v->cluster]++;
     }
 
+#if 0
     for (unsigned i = 0; i < NB_CLUSTERS; i++)
     {
         printf("Pixels in cluster %u: %u.\n", i, pixels_per_cluster[i]);
     }
+#endif
 
     // Update the img to show every cluster
     unsigned cluster_size = 255 / NB_CLUSTERS;
     for (unsigned i = 0; i < img->width * img->height; i++)
     {
-        if (false && vectors[i].cluster == CLOUDS_CLUSTER)
+        if (vectors[i].cluster == CLOUDS_CLUSTER)
         {
             img->pixels[3*i]     = 255;
             img->pixels[3*i + 1] = 0;
