@@ -17,11 +17,11 @@ void process_image(const char* name)
     printf("============================================\n");
     printf("Processing file: %s ...\n", name);
 
-    int nb_col = gdk_pixbuf_get_width(pix_buf);
-    int nb_line = gdk_pixbuf_get_height(pix_buf);
+    int width = gdk_pixbuf_get_width(pix_buf);
+    int height = gdk_pixbuf_get_height(pix_buf);
     guchar* pixels = gdk_pixbuf_get_pixels(pix_buf);
 
-    ComputeImage(pixels, nb_col, nb_line, NULL);
+    ComputeImage(pixels, height, width, NULL);
 
     gdk_pixbuf_unref(pix_buf);
 }
