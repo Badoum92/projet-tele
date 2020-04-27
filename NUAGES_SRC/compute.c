@@ -14,7 +14,7 @@ DES FONCTIONS
 *******************************************************/
 
 #define CLOUDS_CLUSTER 0
-#define NB_CLUSTERS    9
+#define NB_CLUSTERS    8
 
 struct image
 {
@@ -152,12 +152,14 @@ void init_kmeans(struct image* img, struct vector* vectors, int* mass_centers)
         }
     }
 
-    // Initialize mass centers
-    unsigned step = 255 / NB_CLUSTERS;
+    // Initialize mass centers equally spaced on the homogeneity axis
+    unsigned min = 0;
+    unsigned step = (255 - min) / (NB_CLUSTERS);
     for (unsigned i_cluster = 0; i_cluster < NB_CLUSTERS; i_cluster++)
     {
         unsigned value = 255 - i_cluster * step;
         memset(mass_centers + i_cluster * 5, value, 5 * sizeof(int));
+        printf("Initializing mass center #%u with %u.\n", i_cluster, value);
     }
 
     reassign_values(img, vectors, mass_centers);
